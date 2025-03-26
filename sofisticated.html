@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Preparation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        .draggable {
+            cursor: move;
+        }
+        .droppable {
+            position: relative;
+        }
+        .placed-item {
+            position: absolute;
+            cursor: pointer;
+            z-index: 10; /* Ensure the placed items are above the PDF */
+        }
+        .signature-style {
+            font-family: 'Dancing Script', cursive;
+            font-size: 24px;
+            font-weight: bold;
+            color: black;
+        }
+        .signature-pad {
+            border: 1px solid #d3d3d3;
+            border-radius: 8px;
+            width: 100%;
+            height: 150px;
+        }
+        .signature-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        .non-draggable {
+            cursor: default;
+        }
+        .name-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .text-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+        #document-viewer {
+            position: relative;
+            background-color: white;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            transform-origin: 0 0;
+            transition: transform 0.25s ease;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
+    <!-- PDF.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <!-- Mammoth.js Library for Word Documents -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.8/mammoth.browser.min.js"></script>
+    <!-- html2canvas Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- jsPDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <!-- Document Details Section -->
+    <div id="document-details" class="max-w-4xl mx-auto p-6">
+        <!-- Progress Steps -->
+        <div class="flex items-center justify-between mb-8">
+            <div class="flex items-center space-x-6">
+                <button class="bg-gray-200 text-gray-700 px-4 py-2 rounded">
+                    Back
+                </button>
+                <div class="flex items-center text-blue-500">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-blue-500 text-white">
+                        1
+                    </div>
+                    <span class="ml-2">
+                        Document Details
+                    </span>
+                </div>
+                <div class="w-8 h-0.5 bg-gray-300 mx-6"></div>
+                <div class="flex items-center text-blue-500">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-blue-500 text-white">
+                        2
+                    </div>
+                    <span class="ml-2">
+                        Add
+                    </span>
+                </div>
+                <div class="w-8 h-0.5 bg-gray-300 mx-6"></div>
+                <div class="flex items-center text-gray-400">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200">
+                        3
+                    </div>
+                    <span class="ml-2">
+                        Prepare
+                    </span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-6">
+                <button class="bg-blue-500 text-white px-4 py-2 rounded" onclick="nextPage()">
+                    Next
+                </button>
+            </div>
+        </div>
+        <!-- Upload Document Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <div class="border-2 border-dashed border-gray-300 p-6 rounded-lg text-center" ondragover="handleDragOver(event)" ondrop="handleDrop(event)">
+                <p class="text-gray-500 mb-2">
+                    PDF or DOC/DOCX (maximum 200 MB in total per process for multiple documents)
+                </p>
+                <input class="hidden" id="file-upload" onchange="handleFileUpload(event)" type="file"/>
+                <button class="bg-gray-200 text-gray-700 px-4 py-2 rounded" onclick="document.getElementById('file-upload').click()">
+                    Upload From Device
+                </button>
+            </div>
+        </div>
+        <!-- Document Name Input -->
+        <div class="mb-6">
+            <label class="block text-gray-700 mb-2" for="document-name">
+                Name of Document
+            </label>
+            <input class="w-full border border-gray-300 p-2 rounded" id="document-name" placeholder="Enter contract name" type="text"/>
+        </div>
+        <!-- Signature Type Section -->
+        <div class="mb-6">
+            <label class="block text-gray-700 mb-2" for="signature-type">
+                Signature Type
+            </label>
+            <div class="flex space-x-2">
+                <button class="signature-button bg-blue-100 text-blue-500 px-4 py-2 rounded" onclick="selectButton(event)">
+                    Simple
+                </button>
+                <button class="signature-button bg-gray-200 text-gray-700 px-4 py-2 rounded" onclick="showUnavailableMessage('Advanced Signature Type is not available on free membership')">
+                    Advanced
+                </button>
+                <button class="signature-button bg-gray-200 text-gray-700 px-4 py-2 rounded" onclick="showUnavailableMessage('Qualified Signature Type is not available on free membership')">
+                    Qualified
+                </button>
+            </div>
+            <div class="mt-2 text-red-500" id="unavailable-message"></div>
+        </div>
+        <!-- Recipients Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <label class="block text-gray-700 mb-2" for="recipients">
+                Recipients
+            </label>
+            <div class="flex items-center space-x-2">
+                <input class="w-full border border-gray-300 p-2 rounded" id="recipients" onkeypress="addRecipient(event)" placeholder="Add Signatory by Email" type="text"/>
+                <button class="bg-gray-200 text-gray-700 px-4 py-2 rounded">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button class="bg-gray-200 text-gray-700 px-4 py-2 rounded">
+                    <i class="fas fa-users"></i>
+                    Add Signatory Group
+                </button>
+            </div>
+            <div class="mt-2 text-red-500" id="email-error-message"></div>
+            <div class="mt-4" id="recipient-list"></div>
+        </div>
+    </div>
+
+    <!-- Document Preparation Section -->
+    <div id="document-preparation" class="hidden flex h-screen">
+        <!-- Left Sidebar -->
+        <div class="w-1/5 bg-white p-4 border-r border-gray-300">
+            <div class="flex items-center mb-4">
+                <div class="w-10 h-10 bg-blue-500 text-white rounded-full flex items-center justify-center">
+                    <span class="text-xl">K</span>
+                </div>
+                <div class="ml-2">
+                    <p class="text-sm font-semibold">Signatory</p>
+                </div>
+            </div>
+            <div class="mb-4">
+                <p class="text-sm font-semibold">BASIC FIELDS</p>
+                <div class="mt-2 space-y-2">
+                    <button class="w-full bg-blue-100 text-blue-700 py-2 px-4 rounded flex items-center draggable" draggable="true" ondragstart="drag(event)" data-type="signature">
+                        <i class="fas fa-signature mr-2"></i> Signature
+                    </button>
+                    <button class="w-full bg-blue-100 text-blue-700 py-2 px-4 rounded flex items-center draggable" draggable="true" ondragstart="drag(event)" data-type="name">
+                        <i class="fas fa-user mr-2"></i> Name
+                    </button>
+                    <button class="w-full bg-blue-100 text-blue-700 py-2 px-4 rounded flex items-center draggable" draggable="true" ondragstart="drag(event)" data-type="date">
+                        <i class="fas fa-calendar-alt mr-2"></i> Date
+                    </button>
+                    <button class="w-full bg-blue-100 text-blue-700 py-2 px-4 rounded flex items-center draggable" draggable="true" ondragstart="drag(event)" data-type="ip-location">
+                        <i class="fas fa-map-marker-alt mr-2"></i> IP Location
+                    </button>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm font-semibold">BLOCKS</p>
+                <div class="mt-2">
+                    <button class="w-full bg-blue-100 text-blue-700 py-2 px-4 rounded flex items-center draggable" draggable="true" ondragstart="drag(event)" data-type="textbox">
+                        <i class="fas fa-text-width mr-2"></i> Textbox
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col">
+            <!-- Top Bar -->
+            <div class="flex items-center justify-between bg-white p-4 border-b border-gray-300">
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-500"><i class="fas fa-arrow-left"></i></button>
+                    <button class="text-gray-500"><i class="fas fa-arrow-right"></i></button>
+                    <button class="text-gray-500"><i class="fas fa-file-alt"></i></button>
+                    <button class="text-gray-500" onclick="zoomOut()"><i class="fas fa-search-minus"></i></button>
+                    <select class="border border-gray-300 rounded px-2 py-1" id="zoom-level" onchange="changeZoomLevel(event)">
+                        <option value="1">100%</option>
+                        <option value="0.75">75%</option>
+                        <option value="0.5">50%</option>
+                    </select>
+                    <button class="text-gray-500" onclick="zoomIn()"><i class="fas fa-search-plus"></i></button>
+                </div>
+                <div class="space-x-2">
+                    <button class="bg-blue-500 text-white py-2 px-4 rounded" onclick="saveDocumentAsImage()">Save as Image</button>
+                    <button class="bg-blue-500 text-white py-2 px-4 rounded" onclick="saveDocumentAsPDF()">Save as PDF</button>
+                    <button class="bg-green-500 text-white py-2 px-4 rounded">Send Document</button>
+                </div>
+            </div>
+
+            <!-- Document Viewer -->
+            <div class="flex-1 flex justify-center items-center bg-gray-200">
+                <div id="document-viewer" class="bg-white w-3/4 h-3/4 border border-gray-300 flex items-center justify-center droppable" ondragover="allowDrop(event)" ondrop="drop(event)">
+                    <p class="text-gray-400 text-lg">Drag and drop elements or a file to start editing your document</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="w-1/5 bg-white p-4 border-l border-gray-300">
+            <div class="flex items-center justify-between mb-4">
+                <p class="text-sm font-semibold">Signature</p>
+                <button class="text-gray-500"><i class="fas fa-times"></i></button>
+            </div>
+            <div>
+                <p class="text-sm font-semibold">RECIPIENT</p>
+                <div class="mt-2">
+                    <!-- Recipient details go here -->
+                </div>
+            </div>
+            <div class="mt-4">
+                <p class="text-sm font-semibold">ACTIONS</p>
+                <div class="mt-2 space-y-2">
+                    <button class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded flex items-center">
+                        <i class="fas fa-copy mr-2"></i> Duplicate
+                    </button>
+                    <button class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded flex items-center" id="delete-button">
+                        <i class="fas fa-trash-alt mr-2"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signature Popup -->
+    <div id="signature-popup" class="signature-popup bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold">Create Signature</h2>
+            <button class="text-gray-500 hover:text-gray-700" onclick="closeSignaturePopup()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="border-b border-gray-300 mb-4">
+            <ul class="flex justify-center">
+                <li class="text-blue-500 border-b-2 border-blue-500 pb-2">Draw</li>
+            </ul>
+        </div>
+        <div class="border border-gray-300 rounded-lg mb-4 p-4">
+            <canvas id="signature-pad" class="signature-pad"></canvas>
+        </div>
+        <div class="flex justify-between">
+            <button id="clear-btn" class="bg-white text-blue-500 border border-blue-500 rounded-lg px-4 py-2 hover:bg-blue-50">CLEAR</button>
+            <button class="bg-blue-500 text-white rounded-lg px-4 py-2 hover:bg-blue-600" onclick="placeSignature()">PLACE</button>
+        </div>
+    </div>
+
+    <!-- Name Popup -->
+    <div id="name-popup" class="name-popup">
+        <div class="w-full max-w-md mx-auto">
+            <div class="text-center border-b-2 border-gray-200 pb-2 mb-4">
+                <h2 class="text-lg font-semibold text-blue-500">Type</h2>
+                <div class="border-b-2 border-blue-500 w-16 mx-auto mt-1"></div>
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="full-name">
+                    Your Full Name
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="full-name" type="text" value=" ">
+            </div>
+            <div class="flex justify-between">
+                <button class="bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-2 px-4 border border-blue-500 hover:border-transparent rounded" onclick="clearName()">
+                    Clear
+                </button>
+                <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" onclick="placeName()">
+                    Place
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Text Popup -->
+    <div id="text-popup" class="text-popup">
+        <div class="w-full max-w-2xl p-4">
+            <div class="flex items-center border-b border-gray-200 mb-4">
+                <div class="text-blue-500 font-semibold text-lg pb-2 border-b-2 border-blue-500">Create</div>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4">
+                <textarea id="text-input" class="w-full h-40 p-2 border border-gray-200 rounded-lg focus:outline-none" placeholder="Add your text here ..."></textarea>
+            </div>
+            <div class="flex justify-between items-center mt-4">
+                <button class="text-blue-500 bg-transparent border-none focus:outline-none" onclick="clearText()">Clear</button>
+                <button class="bg-blue-500 text-white px-4 py-2 rounded-lg" onclick="placeText()">Place</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize jsPDF
+        const { jsPDF } = window.jspdf;
+
+        // Document Details Functions
+        function handleFileUpload(event) {
+            const fileInput = event.target;
+            const fileName = fileInput.files[0].name;
+            document.getElementById('document-name').value = fileName;
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                localStorage.setItem('uploadedFile', e.target.result);
+                localStorage.setItem('uploadedFileName', fileName);
+                localStorage.setItem('uploadedFileType', file.type);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function selectButton(event) {
+            const buttons = document.querySelectorAll('.signature-button');
+            buttons.forEach(button => {
+                button.classList.remove('bg-blue-100', 'text-blue-500');
+                button.classList.add('bg-gray-200', 'text-gray-700');
+            });
+            event.target.classList.remove('bg-gray-200', 'text-gray-700');
+            event.target.classList.add('bg-blue-100', 'text-blue-500');
+            hideUnavailableMessage();
+        }
+
+        function addRecipient(event) {
+            if (event.key === 'Enter') {
+                const emailInput = event.target;
+                const email = emailInput.value;
+                const recipientList = document.getElementById('recipient-list');
+                if (email.includes('@') && email.includes('.')) {
+                    const recipientItem = document.createElement('div');
+                    recipientItem.className = 'bg-gray-100 p-2 rounded mt-2';
+                    recipientItem.textContent = email;
+                    recipientList.appendChild(recipientItem);
+                    emailInput.value = ''; // Clear the input field
+                    document.getElementById('email-error-message').textContent = ''; // Clear error message
+                } else {
+                    const messageContainer = document.getElementById('email-error-message');
+                    messageContainer.textContent = "Please enter a valid email address";
+                }
+            }
+        }
+
+        function showUnavailableMessage(message) {
+            const messageContainer = document.getElementById('unavailable-message');
+            messageContainer.textContent = message;
+        }
+
+        function hideUnavailableMessage() {
+            const messageContainer = document.getElementById('unavailable-message');
+            messageContainer.textContent = "";
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.dataTransfer.dropEffect = 'copy';
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                document.getElementById('file-upload').files = files;
+                handleFileUpload({ target: document.getElementById('file-upload') });
+            }
+        }
+
+        function nextPage() {
+            document.getElementById('document-details').classList.add('hidden');
+            document.getElementById('document-preparation').classList.remove('hidden');
+            const uploadedFile = localStorage.getItem('uploadedFile');
+            const uploadedFileType = localStorage.getItem('uploadedFileType');
+            const documentViewer = document.getElementById('document-viewer');
+
+            if (uploadedFile) {
+                if (uploadedFileType === 'application/pdf') {
+                    renderPDF(uploadedFile, documentViewer);
+                } else if (uploadedFileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    renderWordDocument(uploadedFile, documentViewer);
+                } else if (uploadedFileType.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = uploadedFile;
+                    img.style.maxWidth = '100%';
+                    img.style.maxHeight = '100%';
+                    documentViewer.innerHTML = '';
+                    documentViewer.appendChild(img);
+                }
+            }
+        }
+
+        // PDF Rendering Function
+        function renderPDF(file, container) {
+            pdfjsLib.getDocument(file).promise.then(pdf => {
+                pdf.getPage(1).then(page => {
+                    const scale = 1.5;
+                    const viewport = page.getViewport({ scale });
+
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    container.innerHTML = '';
+                    container.appendChild(canvas);
+
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    page.render(renderContext);
+                });
+            });
+        }
+
+        // Word Document Rendering Function
+        function renderWordDocument(file, container) {
+            mammoth.convertToHtml({ arrayBuffer: file }).then(result => {
+                container.innerHTML = result.value;
+            });
+        }
+
+        // Document Preparation Functions
+        function allowDrop(event) {
+            event.preventDefault();
+        }
+
+        function drag(event) {
+            if (event.target.classList.contains('non-draggable')) {
+                event.preventDefault();
+                return;
+            }
+            event.dataTransfer.setData("text", event.target.getAttribute('data-type'));
+        }
+
+        function drop(event) {
+            event.preventDefault();
+            const type = event.dataTransfer.getData("text");
+            const rect = event.target.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            const newElement = document.createElement("div");
+            newElement.className = "placed-item bg-blue-100 text-blue-700 py-2 px-4 rounded flex items-center";
+            newElement.style.position = "absolute";
+            newElement.style.left = `${x}px`;
+            newElement.style.top = `${y}px`;
+            newElement.setAttribute('data-type', type);
+
+            let iconClass, text;
+            switch (type) {
+                case 'signature':
+                    iconClass = 'fas fa-signature';
+                    text = 'Signature';
+                    break;
+                case 'name':
+                    iconClass = 'fas fa-user';
+                    text = 'Name';
+                    break;
+                case 'date':
+                    iconClass = 'fas fa-calendar-alt';
+                    text = 'Date';
+                    break;
+                case 'ip-location':
+                    iconClass = 'fas fa-map-marker-alt';
+                    text = 'IP Location';
+                    break;
+                case 'textbox':
+                    iconClass = 'fas fa-text-width';
+                    text = 'Textbox';
+                    break;
+            }
+
+            newElement.innerHTML = `<i class="${iconClass} mr-2"></i>${text}`;
+            newElement.onclick = function() {
+                performAction(this, type);
+            };
+
+            document.getElementById('document-viewer').appendChild(newElement);
+        }
+
+        function performAction(element, type) {
+            if (type === 'signature') {
+                openSignaturePopup(element);
+            } else if (type === 'name') {
+                openNamePopup(element);
+            } else if (type === 'textbox') {
+                openTextPopup(element);
+            } else {
+                switch (type) {
+                    case 'date':
+                        const date = new Date().toLocaleDateString();
+                        element.innerHTML = `<i class="fas fa-calendar-alt mr-2"></i>${date}`;
+                        break;
+                    case 'ip-location':
+                        fetch('https://ipapi.co/json/')
+                            .then(response => response.json())
+                            .then(data => {
+                                element.innerHTML = `<i class="fas fa-map-marker-alt mr-2"></i>${data.city}, ${data.country_name}`;
+                            });
+                        break;
+                }
+            }
+        }
+
+        // Signature Popup Functions
+        const canvas = document.getElementById('signature-pad');
+        const ctx = canvas.getContext('2d');
+        let drawing = false;
+        let currentElement = null;
+
+        canvas.addEventListener('mousedown', (e) => {
+            drawing = true;
+            ctx.beginPath();
+            ctx.moveTo(e.offsetX, e.offsetY);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (drawing) {
+                ctx.lineTo(e.offsetX, e.offsetY);
+                ctx.stroke();
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            drawing = false;
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            drawing = false;
+        });
+
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        function openSignaturePopup(element) {
+            currentElement = element;
+            document.getElementById('signature-popup').style.display = 'block';
+        }
+
+        function closeSignaturePopup() {
+            document.getElementById('signature-popup').style.display = 'none';
+        }
+
+        function placeSignature() {
+            const dataUrl = canvas.toDataURL();
+            currentElement.innerHTML = `<img src="${dataUrl}" alt="Signature" style="width: 100px; height: auto;">`;
+            currentElement.classList.add('non-draggable');
+            closeSignaturePopup();
+        }
+
+        // Name Popup Functions
+        let currentNameElement = null;
+
+        function openNamePopup(element) {
+            currentNameElement = element;
+            document.getElementById('name-popup').style.display = 'block';
+        }
+
+        function closeNamePopup() {
+            document.getElementById('name-popup').style.display = 'none';
+        }
+
+        function clearName() {
+            document.getElementById('full-name').value = '';
+        }
+
+        function placeName() {
+            const name = document.getElementById('full-name').value;
+            if (name.trim() !== "") {
+                currentNameElement.innerHTML = `<i class="fas fa-user mr-2"></i>${name}`;
+            }
+            closeNamePopup();
+        }
+
+        // Text Popup Functions
+        let currentTextElement = null;
+
+        function openTextPopup(element) {
+            currentTextElement = element;
+            document.getElementById('text-popup').style.display = 'block';
+        }
+
+        function closeTextPopup() {
+            document.getElementById('text-popup').style.display = 'none';
+        }
+
+        function clearText() {
+            document.getElementById('text-input').value = '';
+        }
+
+        function placeText() {
+            const text = document.getElementById('text-input').value;
+            if (text.trim() !== "") {
+                currentTextElement.innerHTML = `<i class="fas fa-text-width mr-2"></i>${text}`;
+            }
+            closeTextPopup();
+        }
+
+        // Function to save the document as an image
+        function saveDocumentAsImage() {
+            const documentViewer = document.getElementById('document-viewer');
+
+            html2canvas(documentViewer).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'document.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+
+        // Function to save the document as a PDF
+        function saveDocumentAsPDF() {
+            const documentViewer = document.getElementById('document-viewer');
+
+            html2canvas(documentViewer).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 210; // A4 width in mm
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                pdf.save('document.pdf');
+            });
+        }
+
+        // Function to delete the current uploaded file
+        function deleteFile() {
+            // Clear the document viewer
+            const documentViewer = document.getElementById('document-viewer');
+            documentViewer.innerHTML = '<p class="text-gray-400 text-lg">Drag and drop elements or a file to start editing your document</p>';
+
+            // Remove the file from local storage
+            localStorage.removeItem('uploadedFile');
+            localStorage.removeItem('uploadedFileName');
+            localStorage.removeItem('uploadedFileType');
+
+            // Optionally, you can also reset the document name input field
+            document.getElementById('document-name').value = '';
+        }
+
+        // Add event listener to the delete button
+        document.getElementById('delete-button').addEventListener('click', deleteFile);
+
+        // Handle file drop
+        document.getElementById('document-viewer').addEventListener('drop', (event) => {
+            event.preventDefault();
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.style.maxWidth = '100%';
+                        img.style.maxHeight = '100%';
+                        document.getElementById('document-viewer').innerHTML = '';
+                        document.getElementById('document-viewer').appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                } else if (file.type === 'application/pdf') {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        renderPDF(e.target.result, document.getElementById('document-viewer'));
+                    };
+                    reader.readAsDataURL(file);
+                } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        renderWordDocument(e.target.result, document.getElementById('document-viewer'));
+                    };
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    alert('Only image, PDF, and Word files are supported.');
+                }
+            }
+        });
+
+        // Allow file drag over
+        document.getElementById('document-viewer').addEventListener('dragover', (event) => {
+            event.preventDefault();
+        });
+
+        // Zoom Functions
+        let currentZoom = 1;
+
+        function zoomIn() {
+            currentZoom += 0.25;
+            applyZoom();
+        }
+
+        function zoomOut() {
+            currentZoom -= 0.25;
+            if (currentZoom < 0.25) currentZoom = 0.25;
+            applyZoom();
+        }
+
+        function changeZoomLevel(event) {
+            currentZoom = parseFloat(event.target.value);
+            applyZoom();
+        }
+
+        function applyZoom() {
+            const documentViewer = document.getElementById('document-viewer');
+            documentViewer.style.transform = `scale(${currentZoom})`;
+        }
+    </script>
+</body>
+</html>
